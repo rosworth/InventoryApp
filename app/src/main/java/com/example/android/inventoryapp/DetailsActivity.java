@@ -10,7 +10,6 @@ import android.content.Loader;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
-import android.provider.MediaStore;
 import android.support.v4.app.NavUtils;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
@@ -20,12 +19,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.example.android.inventoryapp.data.InventoryContract.ItemEntry;
-
-import java.io.IOException;
 
 public class DetailsActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor> {
 
@@ -113,6 +109,39 @@ public class DetailsActivity extends AppCompatActivity implements LoaderManager.
                 }
             }
         });
+
+        Button order = (Button) findViewById(R.id.order_more);
+        if (mCurrentUri == null) {
+            //hide order button if new item
+            order.setVisibility(View.GONE);
+        } else {
+            order.setVisibility(View.VISIBLE);
+            order.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    final String message = orderInfo();
+                    Intent intent = new Intent(Intent.ACTION_SENDTO);
+                    intent.setData(Uri.parse("mailto:" + mSupplierEditText.getText().toString()));
+                    intent.putExtra(Intent.EXTRA_SUBJECT, mNameEditText.getText().toString());
+                    intent.putExtra(Intent.EXTRA_TEXT, message);
+                    if (intent.resolveActivity(getPackageManager()) != null) {
+                        startActivity(intent);
+                    }
+                }
+            });
+        }
+    }
+
+    private String orderInfo() {
+        StringBuilder sb = new StringBuilder();
+        if (inputCheck(mNameEditText, mSupplierEditText, mPriceEditText)) {
+            sb.append("\nProduct: " + mNameEditText.getText().toString());
+            sb.append("\nPrice: " + mPriceEditText.getText().toString());
+            sb.append("\nQuantity: " + mQuantityEditText.getText().toString());
+        } else {
+            sb.append("\nFailed to get product information.");
+        }
+        return sb.toString();
     }
 
     @Override
@@ -121,11 +150,8 @@ public class DetailsActivity extends AppCompatActivity implements LoaderManager.
         if (resultCode == RESULT_OK) {
             if (requestCode == SELECT_PICTURE) {
                 selectedImageUri = data.getData();
-                ImageView img = (ImageView) findViewById(R.id.preview_image);
-                try {
-                    img.setImageBitmap(MediaStore.Images.Media.getBitmap(getContentResolver(), selectedImageUri));
-                } catch (IOException e) {
-                    e.printStackTrace();
+                if (selectedImageUri != null) {
+                    Toast.makeText(this, R.string.upload_successful, Toast.LENGTH_SHORT).show();
                 }
             }
         }
@@ -193,45 +219,55 @@ public class DetailsActivity extends AppCompatActivity implements LoaderManager.
             return;
         }
 
-        ContentValues values = new ContentValues();
+        if (inputCheck(mNameEditText, mSupplierEditText, mPriceEditText)) {
 
-        if (TextUtils.isEmpty(nameString)) {
+            ContentValues values = new ContentValues();
+            values.put(ItemEntry.COLUMN_ITEM_NAME, nameString);
+            values.put(ItemEntry.COLUMN_ITEM_SUPPLIER, supplierString);
+            values.put(ItemEntry.COLUMN_ITEM_PRICE, Double.parseDouble(priceString));
+            int quantity = 0;
+            if (!TextUtils.isEmpty(quantityString)) {
+                quantity = Integer.parseInt(quantityString);
+            }
+            values.put(ItemEntry.COLUMN_ITEM_QUANTITY, quantity);
+            values.put(ItemEntry.COLUMN_ITEM_IMAGE, String.valueOf(selectedImageUri));
+            if (mCurrentUri == null) {
+                Uri newUri = getContentResolver().insert(ItemEntry.CONTENT_URI, values);
+                if (newUri == null) {
+                    Toast.makeText(this, getString(R.string.editor_insert_item_failed), Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, getString(R.string.editor_insert_item_successful), Toast.LENGTH_SHORT).show();
+                }
+            } else {
+                int rowsAffected = getContentResolver().update(mCurrentUri, values, null, null);
+                if (rowsAffected == 0) {
+                    Toast.makeText(this, getString(R.string.editor_update_item_failed), Toast.LENGTH_SHORT).show();
+                } else {
+                    Toast.makeText(this, getString(R.string.editor_update_item_successful), Toast.LENGTH_SHORT).show();
+                }
+            }
+            finish();
+        }
+    }
+
+    private boolean inputCheck(EditText name, EditText supplier, EditText price) {
+        if (TextUtils.isEmpty(name.getText().toString())) {
             mNameEditText.setError(getString(R.string.input_error_name));
-            return;
+            Toast.makeText(this, getString(R.string.input_error_name), Toast.LENGTH_SHORT).show();
+            return false;
         }
-        if (TextUtils.isEmpty(supplierString)) {
+        if (TextUtils.isEmpty(supplier.getText().toString())) {
             mSupplierEditText.setError(getString(R.string.input_error_supplier));
-            return;
+            Toast.makeText(this, getString(R.string.input_error_supplier), Toast.LENGTH_SHORT).show();
+            return false;
         }
-        if (TextUtils.isEmpty(priceString)) {
+        //input type number--no need to check for invalid characters
+        if (TextUtils.isEmpty(price.getText().toString())) {
             mPriceEditText.setError(getString(R.string.input_error_price));
-            return;
+            Toast.makeText(this, getString(R.string.input_error_price), Toast.LENGTH_SHORT).show();
+            return false;
         }
-        values.put(ItemEntry.COLUMN_ITEM_NAME, nameString);
-        values.put(ItemEntry.COLUMN_ITEM_SUPPLIER, supplierString);
-        values.put(ItemEntry.COLUMN_ITEM_PRICE, Double.parseDouble(priceString));
-        int quantity = 0;
-        if (!TextUtils.isEmpty(quantityString)) {
-            quantity = Integer.parseInt(quantityString);
-        }
-        values.put(ItemEntry.COLUMN_ITEM_QUANTITY, quantity);
-        values.put(ItemEntry.COLUMN_ITEM_IMAGE, String.valueOf(selectedImageUri));
-        if (mCurrentUri == null) {
-            Uri newUri = getContentResolver().insert(ItemEntry.CONTENT_URI, values);
-            if (newUri == null) {
-                Toast.makeText(this, getString(R.string.editor_insert_item_failed), Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, getString(R.string.editor_insert_item_successful), Toast.LENGTH_SHORT).show();
-            }
-        } else {
-            int rowsAffected = getContentResolver().update(mCurrentUri, values, null, null);
-            if (rowsAffected == 0) {
-                Toast.makeText(this, getString(R.string.editor_update_item_failed), Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(this, getString(R.string.editor_update_item_successful), Toast.LENGTH_SHORT).show();
-            }
-        }
-        finish();
+        return true;
     }
 
     private void clearFields() {
