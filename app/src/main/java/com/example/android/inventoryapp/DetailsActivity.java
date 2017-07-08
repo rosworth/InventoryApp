@@ -7,10 +7,14 @@ import android.content.CursorLoader;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.Loader;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.NavUtils;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.text.TextUtils;
 import android.view.Menu;
@@ -19,9 +23,12 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.Toast;
 
 import com.example.android.inventoryapp.data.InventoryContract.ItemEntry;
+
+import java.text.DecimalFormat;
 
 public class DetailsActivity extends AppCompatActivity implements LoaderManager.LoaderCallbacks<Cursor> {
 
@@ -72,9 +79,8 @@ public class DetailsActivity extends AppCompatActivity implements LoaderManager.
         mImageEdit.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent();
-                intent.setType("image/*");
-                intent.setAction(Intent.ACTION_GET_CONTENT);
+                checkStoragePermission();
+                Intent intent = new Intent(Intent.ACTION_PICK, android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
                 startActivityForResult(Intent.createChooser(intent, getString(R.string.select_image)), SELECT_PICTURE);
             }
         });
@@ -120,15 +126,29 @@ public class DetailsActivity extends AppCompatActivity implements LoaderManager.
                 @Override
                 public void onClick(View v) {
                     final String message = orderInfo();
-                    Intent intent = new Intent(Intent.ACTION_SENDTO);
-                    intent.setData(Uri.parse("mailto:" + mSupplierEditText.getText().toString()));
-                    intent.putExtra(Intent.EXTRA_SUBJECT, mNameEditText.getText().toString());
-                    intent.putExtra(Intent.EXTRA_TEXT, message);
-                    if (intent.resolveActivity(getPackageManager()) != null) {
-                        startActivity(intent);
+                    if (message != null) {
+                        Intent intent = new Intent(Intent.ACTION_SENDTO);
+                        intent.setData(Uri.parse("mailto:" + mSupplierEditText.getText().toString()));
+                        intent.putExtra(Intent.EXTRA_SUBJECT, mNameEditText.getText().toString());
+                        intent.putExtra(Intent.EXTRA_TEXT, message);
+                        if (intent.resolveActivity(getPackageManager()) != null) {
+                            startActivity(intent);
+                        }
                     }
                 }
             });
+        }
+    }
+
+    private void checkStoragePermission() {
+        if (Build.VERSION.SDK_INT >= 23) {
+            if (ContextCompat.checkSelfPermission(this,
+                    android.Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+                    || ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE, android.Manifest.permission.READ_EXTERNAL_STORAGE},
+                        1);
+            }
         }
     }
 
@@ -138,20 +158,21 @@ public class DetailsActivity extends AppCompatActivity implements LoaderManager.
             sb.append("\nProduct: " + mNameEditText.getText().toString());
             sb.append("\nPrice: " + mPriceEditText.getText().toString());
             sb.append("\nQuantity: " + mQuantityEditText.getText().toString());
-        } else {
-            sb.append("\nFailed to get product information.");
+            return sb.toString();
         }
-        return sb.toString();
+        return null;
     }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        ImageView imageView = (ImageView) findViewById(R.id.image_check);
         super.onActivityResult(requestCode, resultCode, data);
         if (resultCode == RESULT_OK) {
             if (requestCode == SELECT_PICTURE) {
                 selectedImageUri = data.getData();
                 if (selectedImageUri != null) {
                     Toast.makeText(this, R.string.upload_successful, Toast.LENGTH_SHORT).show();
+                    imageView.setVisibility(View.VISIBLE);
                 }
             }
         }
@@ -224,13 +245,19 @@ public class DetailsActivity extends AppCompatActivity implements LoaderManager.
             ContentValues values = new ContentValues();
             values.put(ItemEntry.COLUMN_ITEM_NAME, nameString);
             values.put(ItemEntry.COLUMN_ITEM_SUPPLIER, supplierString);
-            values.put(ItemEntry.COLUMN_ITEM_PRICE, Double.parseDouble(priceString));
+
+            DecimalFormat priceFormat = new DecimalFormat("#.00");
+            double price = Double.valueOf(priceFormat.format(Double.parseDouble(priceString)));
+            values.put(ItemEntry.COLUMN_ITEM_PRICE, price);
+
             int quantity = 0;
             if (!TextUtils.isEmpty(quantityString)) {
                 quantity = Integer.parseInt(quantityString);
             }
             values.put(ItemEntry.COLUMN_ITEM_QUANTITY, quantity);
-            values.put(ItemEntry.COLUMN_ITEM_IMAGE, String.valueOf(selectedImageUri));
+            if (selectedImageUri != null) { //keeps previous image uri when being edited and no new image is added
+                values.put(ItemEntry.COLUMN_ITEM_IMAGE, String.valueOf(selectedImageUri));
+            }
             if (mCurrentUri == null) {
                 Uri newUri = getContentResolver().insert(ItemEntry.CONTENT_URI, values);
                 if (newUri == null) {
@@ -261,10 +288,15 @@ public class DetailsActivity extends AppCompatActivity implements LoaderManager.
             Toast.makeText(this, getString(R.string.input_error_supplier), Toast.LENGTH_SHORT).show();
             return false;
         }
-        //input type number--no need to check for invalid characters
+        //input type number--check for invalid characters is unnecessary
         if (TextUtils.isEmpty(price.getText().toString())) {
             mPriceEditText.setError(getString(R.string.input_error_price));
             Toast.makeText(this, getString(R.string.input_error_price), Toast.LENGTH_SHORT).show();
+            return false;
+        }
+        if (Double.parseDouble(price.getText().toString()) < .01) {
+            mPriceEditText.setError(getString(R.string.input_price_zero));
+            Toast.makeText(this, getString(R.string.input_price_zero), Toast.LENGTH_SHORT).show();
             return false;
         }
         return true;

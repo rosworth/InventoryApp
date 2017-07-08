@@ -6,7 +6,7 @@
     <string name="action_save">Save</string>
     <string name="action_delete_item">Delete Item</string>
     <string name="action_clear">Clear Fields</string>
-    <string name="empty_view_text">Start by adding items</string>
+    <string name="empty_view_text">Click the button below to add items</string>
     <string name="empty_view_text2">List is empty</string>
     <string name="action_delete_all">Delete All Items</string>
     <string name="action_test_data">Insert Test Data</string>
@@ -41,4 +41,5 @@
     <string name="order_more">Order More</string>
     <string name="in_stock">In Stock: %1$s</string>
     <string name="out_of_stock">%1$s is out of stock</string>
+    <string name="input_price_zero">Invalid price</string>
 </resources>

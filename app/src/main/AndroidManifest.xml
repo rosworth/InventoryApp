@@ -4,6 +4,7 @@
 
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_DOCUMENTS" />
 
     <application
         android:allowBackup="true"
@@ -28,7 +29,7 @@
         <provider
             android:name=".data.InventoryProvider"
             android:authorities="com.example.android.inventoryapp"
-            android:exported="false"
+            android:exported="true"
             android:grantUriPermissions="true" />
     </application>
 
